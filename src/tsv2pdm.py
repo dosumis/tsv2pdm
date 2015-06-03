@@ -2,7 +2,6 @@
 import warnings
 import operator
 
-# Maybe use existing util rather than reinventing the wheel, e.g. https://github.com/brendano/tsvutils ?
 
 
 class tab(object):
