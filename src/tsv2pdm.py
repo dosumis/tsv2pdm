@@ -41,6 +41,7 @@ class tab(object):
         for row in self.tab:
             if not self.validate_row(row):
                 return False
+        return True
             
     def validate_row(self, row):
         for k in row.keys():
