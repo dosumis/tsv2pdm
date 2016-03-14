@@ -2,8 +2,6 @@
 import warnings
 import operator
 
-# Maybe use existing util rather than reinventing the wheel, e.g. https://github.com/brendano/tsvutils ?
-
 
 class tab(object):
     """Stores a tsv file as a list of dicts keyed on column header. 
@@ -13,14 +11,14 @@ class tab(object):
     def __str__(self):
         return "file: %s; type = simple table; length: %d" % (self.file_name, len(self.tab)-1)
     
-    def __init__(self, path = '', file_name = '', key_column = '', headers = []):
+    def __init__(self, path = '', file_name = '', key_column = '', headers = [], tab_as_list = []):
         """Read in file. 
         First arg, path, is path to file, minus file name (not stored in object)
         Second arg , file_name, is file name.
         Third arg, key_column, is a key column to be used for rolling rowColDict.
         All args are optional, entering no args produces a blank object 
         and throws an non-fatal warning. The preferred way of creating an empty table is to specify
-        headers or headers + key_column in the constructor."""
+        headers or headers + key_column or tab_as_list in the constructor."""
         self.file_name = file_name
         self.path = path
         self.key_column = key_column
@@ -34,8 +32,14 @@ class tab(object):
             self.parse_tsv(path, file_name)  # 
         elif headers:
             self.headers = headers
+        elif tab_as_list:
+            if headers:
+                warnings.warn("Ignoring specified headers in favor of those in table.")
+            self.headers = []
+            self.parse_list_table(tab_as_list)
         else:
             warnings.warn("Warning: Creating blank tab object")
+        
     
     def validate(self):
         for row in self.tab:
@@ -54,8 +58,13 @@ class tab(object):
                         
     def _parse_tsv(self, path, file_name):
         tsv_file = open(path + file_name, "rU")
+        self.parse_list_table(tsv_file)
+        tsv_file.close()
+        
+    def parse_list_table(self, input):
+        """Construct a table object from a list of tab delimited strings"""
         hstat = 0
-        for line in tsv_file:
+        for line in input:
             cline = line.rstrip("\n")
             if hstat == 0:
                 self.headers.extend(cline.split("\t"))
@@ -64,11 +73,12 @@ class tab(object):
                 row = {}
                 content = cline.split("\t")
                 i = 0
+                if not len(content) == len(self.headers) :
+                    warnings.warn("Row has %s columns but header has %s columns: %s" % (len(content), len(self.headers), cline))                
                 for head in self.headers:
                     row[head]=content[i]
                     i += 1
                 self.tab.append(row)
-        tsv_file.close()
         
     def parse_tsv(self, path, file_name):
         self._parse_tsv(path, file_name)
@@ -78,9 +88,9 @@ class tab(object):
         Default normal sort order.  Optionally specify reverse as a boolean (applies to all columns)."""
         #Creating to allow overide that does other stuff before calling _print_tab
         return self._print_tab(sort_keys, reverse)
-        
-    def _print_tab(self, sort_keys=(), reverse=False):
-        """Returns table as a string.  Optionally specify a tuple of columns to sort as sort_keys.
+    
+    def tab2list(self, sort_keys=(), reverse=False):
+        """Returns table as a list of strings.  Optionally specify a tuple of columns to sort as sort_keys.
         Default normal sort order.  Optionally specify reverse as a boolean (applies to all columns)."""
         if sort_keys:
             self.sort_tab(sort_keys, reverse)
@@ -90,7 +100,14 @@ class tab(object):
             outrow = []
             for h in self.headers:
                 outrow.append(row[h])
-            out.append('\t'.join(map(unicode, outrow)))  # All content of list to unicode, then joined with a tab, then appended to output.
+        # All content of list to unicode, then joined with a tab, then appended to output.
+            out.append('\t'.join(map(unicode, outrow))) 
+        return out
+        
+    def _print_tab(self, sort_keys=(), reverse=False):
+        """Returns table as a string.  Optionally specify a tuple of columns to sort as sort_keys.
+        Default normal sort order.  Optionally specify reverse as a boolean (applies to all columns)."""
+        out = self.tab2list(sort_keys = sort_keys, reverse = reverse)
         return '\n'.join(out)
     
     def sort_tab(self, sort_keys=(), reverse=False):
@@ -195,5 +212,69 @@ class rcd(tab):
         self.genRowColDict()
         self.tab = [] # Blanking out as this is not primary store for datamodel.
         
+
+class compare_tabs():
+    """
+    Various methods for comparing the contents of 2 tables. 
+    Initialise with 2 tab objects. 
+    Tables must have the identical headers.
+    """
+    
+    # Perhaps could be done more clearly with method overrides for set methods
+    
+    def __init__(self, tab1, tab2):
+        self.tab1 = tab1
+        self.tab2 = tab2
+        self.checks()   # Should make this raise exception
+        self.tab1_as_set = set(tab1.tab2list()[1:]) # Don't use headers for intersections etc
+        self.tab2_as_set = set(tab2.tab2list()[1:])
         
+    def checks(self):
+        stat = 1
+        if not isinstance(self.tab1, tab):
+            warnings.warn("Compare tabs initialised with non-tab object for tab1.") # Should really be fail!
+            stat = 0
+        elif not isinstance(self.tab2, tab):
+            warnings.warn("Compare tabs initialised with non-tab object for tab2.") # Should really be fail!
+            stat = 0
+        elif set(self.tab1.headers).difference(set(self.tab2.headers)):
+            warnings.warn("Tables cannot be compared as they have different headers.")
+            stat = 0
+        if stat:
+            return True
+        else:
+            return False
+  
+    def tab1_only(self):
+        """Compares 2 tab objects, returns a tab object with the entries in tab1 only
+        """
+        outset = self.tab1_as_set.difference(self.tab2_as_set)
+        return self._gen_out_tab(results_set = outset)
+    
+    def _gen_out_tab(self, results_set):
+        """Takes list of tab limited lines corresponding to tab entries, 
+        Returns a tab object"""
+        print results_set
+        outlist = ["\t".join(self.tab1.headers)]  # tab as list to parse needs headers
+        outlist.extend(results_set)
+        outtab = tab(tab_as_list = outlist) # Bit ugly, could do with better initialisation.
+        return outtab
+    
+    def tab2_only(self):
+        """Compares 2 tab objects, returns a tab object with the entries in tab2 only
+        """
+        outset = self.tab2_as_set.difference(self.tab1_as_set)
+        return self._gen_out_tab(results_set = outset)
+        
+    def intersection(self):
+        """Compares 2 tab objects, returns a tab object with the entries in tab2 only
+        """
+        int_set = self.tab1_as_set.intersection(self.tab2_as_set)
+        return self._gen_out_tab(results_set = int_set)
             
+            
+        
+        
+
+
+        
