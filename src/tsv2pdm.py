@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import warnings
 import operator
+import re
 
 
 class tab(object):
@@ -40,7 +41,6 @@ class tab(object):
         else:
             warnings.warn("Warning: Creating blank tab object")
         
-    
     def validate(self):
         for row in self.tab:
             if not self.validate_row(row):
@@ -55,16 +55,22 @@ class tab(object):
             else:
                 return True
         
-                        
+    def return_empty_row(self):
+        """Does wot it sez on the tin."""
+        row = {}
+        for h in self.headers:
+            row[h]=''
+        return row
+        
     def _parse_tsv(self, path, file_name):
         tsv_file = open(path + file_name, "rU")
         self.parse_list_table(tsv_file)
         tsv_file.close()
         
-    def parse_list_table(self, input):
-        """Construct a table object from a list of tab delimited strings"""
+    def _parse_list_table(self, ltab):
+        """Construct a table object from a list of tab delimited strings, including a header line"""
         hstat = 0
-        for line in input:
+        for line in ltab:
             cline = line.rstrip("\n")
             if hstat == 0:
                 self.headers.extend(cline.split("\t"))
@@ -79,6 +85,10 @@ class tab(object):
                     row[head]=content[i]
                     i += 1
                 self.tab.append(row)
+                
+    def parse_list_table(self, ltab):
+        self._parse_list_table(ltab)
+        
         
     def parse_tsv(self, path, file_name):
         self._parse_tsv(path, file_name)
@@ -106,12 +116,17 @@ class tab(object):
         
     def _print_tab(self, sort_keys=(), reverse=False):
         """Returns table as a string.  Optionally specify a tuple of columns to sort as sort_keys.
-        Default normal sort order.  Optionally specify reverse as a boolean (applies to all columns)."""
-        out = self.tab2list(sort_keys = sort_keys, reverse = reverse)
+        Default normal sort order.  Optionally specify reverse as a boolean (applies to all columns).
+        All newlines are converted to a literal '\n.'"""
+        # TODO: Add KWARG & code to allow printing of quote cells with  newlines.
+        out = []
+        for o in self.tab2list(sort_keys = sort_keys, reverse = reverse):
+            out.append(re.sub('\n', r' \\n ', o))
         return '\n'.join(out)
     
     def sort_tab(self, sort_keys=(), reverse=False):
         # For how this works, see http://stackoverflow.com/questions/4233476/sort-a-list-by-multiple-attributes
+        """Sorts a table using the specified sort_keys. Order of keys = order of sort preference."""
         self.tab.sort(key = operator.itemgetter(*sort_keys), reverse=reverse) # Note. * operator unpacks tuple.
         
     def save_tab(self, path = '', file_name = '', sort_keys = (), reverse = False):
@@ -151,14 +166,21 @@ class rcd(tab):
        - headers - Table headers, stored as a list.
     """
     
-    # __init__ inherited from tab
+    # __init__ inherited from tab.  This may not be a good idea!
        
     def __str__(self):
-        return "file: %s; type: row column dict; key_column: %s; length: %d" % (self.file_name, self.key_column, len(self.rowColDict.keys())-1)
+        return "file: %s; type: row column dict; key_column: %s; length: %d" % (self.file_name, 
+                                                                                self.key_column, 
+                                                                                len(self.rowColDict.keys())-1)
         
     def parse_tsv(self, path, file_name):
         """Parses tsv file into self.rowColumnDict"""
         self._parse_tsv(path, file_name)
+        if self.key_column_check():
+            self.genRowColDict()
+            
+    def parse_list_table(self, ltab):
+        self._parse_list_table(ltab)
         if self.key_column_check():
             self.genRowColDict()
         
@@ -212,7 +234,23 @@ class rcd(tab):
         self.genRowColDict()
         self.tab = [] # Blanking out as this is not primary store for datamodel.
         
-
+    def return_empty_row(self, key):
+        """Does wot it sez on the tin."""
+        if key not in self.headers:
+            warnings.warn("Invalid key specified for new row: key = '%s' headers = %s."  % (key, str(self.headers)))
+        row = {}
+        for h in self.headers:
+            row[h]=''
+        return row
+        
+        
+def rcd2tab(rcd, path = '', file_name = ''):
+    """Generate a *new* tab object from and rcd object.
+    Optionally specify a new path and filename for saving."""
+    table = tab(path = '', file_name = '', headers = rcd.headers, key_column=rcd.key_column)
+    table.tab = rcd.rowColDict.values()
+    return table
+    
 class compare_tabs():
     """
     Various methods for comparing the contents of 2 tables. 
