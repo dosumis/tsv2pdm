@@ -48,7 +48,7 @@ class tab(object):
         return True
             
     def validate_row(self, row):
-        for k in row.keys():
+        for k in list(row.keys()):
             if k not in self.headers:
                 warnings.warn("Unknown column header %s. Valid headers are %s." % (k, str(self.headers)))
                 return False
@@ -111,7 +111,7 @@ class tab(object):
             for h in self.headers:
                 outrow.append(row[h])
         # All content of list to unicode, then joined with a tab, then appended to output.
-            out.append('\t'.join(map(unicode, outrow))) 
+            out.append('\t'.join(map(str, outrow))) 
         return out
         
     def _print_tab(self, sort_keys=(), reverse=False):
@@ -171,7 +171,7 @@ class rcd(tab):
     def __str__(self):
         return "file: %s; type: row column dict; key_column: %s; length: %d" % (self.file_name, 
                                                                                 self.key_column, 
-                                                                                len(self.rowColDict.keys())-1)
+                                                                                len(list(self.rowColDict.keys()))-1)
         
     def parse_tsv(self, path, file_name):
         """Parses tsv file into self.rowColumnDict"""
@@ -221,7 +221,7 @@ class rcd(tab):
         # Overriding method
         """Returns table as a string.  Optionally specify a tuple of columns to sort as sort_keys.
         Default normal sort order.  Optionally specify reverse as a boolean (applies to all columns)."""
-        self.tab = self.rowColDict.values()
+        self.tab = list(self.rowColDict.values())
         out = self._print_tab(sort_keys, reverse)
         self.tab = []  # Blanking out as this is not primary store for datamodel.
         return out
@@ -229,7 +229,7 @@ class rcd(tab):
     def append_column(self, cname, content = ''):
         """Append a column called cname to the table"""
         # Overides method on tab. Result is the same, but made safe for rcd
-        self.tab = self.rowColDict.values()
+        self.tab = list(self.rowColDict.values())
         self._append_column(cname, content)
         self.genRowColDict()
         self.tab = [] # Blanking out as this is not primary store for datamodel.
@@ -248,7 +248,7 @@ def rcd2tab(rcd, path = '', file_name = ''):
     """Generate a *new* tab object from and rcd object.
     Optionally specify a new path and filename for saving."""
     table = tab(path = '', file_name = '', headers = rcd.headers, key_column=rcd.key_column)
-    table.tab = rcd.rowColDict.values()
+    table.tab = list(rcd.rowColDict.values())
     return table
     
 class compare_tabs():
@@ -292,7 +292,7 @@ class compare_tabs():
     def _gen_out_tab(self, results_set):
         """Takes list of tab limited lines corresponding to tab entries, 
         Returns a tab object"""
-        print results_set
+        print(results_set)
         outlist = ["\t".join(self.tab1.headers)]  # tab as list to parse needs headers
         outlist.extend(results_set)
         outtab = tab(tab_as_list = outlist) # Bit ugly, could do with better initialisation.
