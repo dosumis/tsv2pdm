@@ -122,7 +122,7 @@ class tab(object):
         out = []
         for o in self.tab2list(sort_keys = sort_keys, reverse = reverse):
             out.append(re.sub('\n', r' \\n ', o))
-        return '\n'.join(out).encode(encoding='utf_8', errors='strict')
+        return '\n'.join(out)
     
     def sort_tab(self, sort_keys=(), reverse=False):
         # For how this works, see http://stackoverflow.com/questions/4233476/sort-a-list-by-multiple-attributes
